@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict, deque
 from collections.abc import Mapping
 from typing import Any, Optional, cast
 
@@ -28,6 +29,10 @@ class GraphParallel(BaseModel):
     """parent parallel start node id"""
     end_to_node_id: Optional[str] = None
     """end to node id"""
+    branch_node_ids: list[str] = []
+    """branch node ids"""
+    children: list = []
+    """sub parallel list"""
 
 
 class Graph(BaseModel):
@@ -345,9 +350,8 @@ class Graph(BaseModel):
                     parallel_mapping[parallel.id] = parallel
                     condition_parallels[condition_hash] = parallel
 
-                    in_branch_node_ids = cls._fetch_all_node_ids_in_parallels(
+                    in_branch_node_ids = cls._bfs_fetch_node_ids(
                         edge_mapping=edge_mapping,
-                        reverse_edge_mapping=reverse_edge_mapping,
                         parallel_branch_node_ids=condition_parallel_branch_node_ids,
                     )
 
@@ -554,108 +558,50 @@ class Graph(BaseModel):
                 )
 
     @classmethod
-    def _fetch_all_node_ids_in_parallels(
-        cls,
-        edge_mapping: dict[str, list[GraphEdge]],
-        reverse_edge_mapping: dict[str, list[GraphEdge]],
-        parallel_branch_node_ids: list[str],
-    ) -> dict[str, list[str]]:
+    def _bfs_fetch_node_ids(
+            cls,
+            edge_mapping: dict[str, list[GraphEdge]],
+            parallel_branch_node_ids: list[str],
+    ) -> dict[str, set[str]]:
         """
-        Fetch all node ids in parallels
+        Fetch all node ids in parallels using bfs
         """
-        routes_node_ids: dict[str, list[str]] = {}
-        for parallel_branch_node_id in parallel_branch_node_ids:
-            routes_node_ids[parallel_branch_node_id] = [parallel_branch_node_id]
+        node_to_branches = defaultdict(set)
+        branch_nodes = defaultdict(set)
+        num_branches = len(parallel_branch_node_ids)
 
-            # fetch routes node ids
-            cls._recursively_fetch_routes(
-                edge_mapping=edge_mapping,
-                start_node_id=parallel_branch_node_id,
-                routes_node_ids=routes_node_ids[parallel_branch_node_id],
-            )
+        if num_branches == 0:
+            return {}
 
-        # fetch leaf node ids from routes node ids
-        leaf_node_ids: dict[str, list[str]] = {}
-        merge_branch_node_ids: dict[str, list[str]] = {}
-        for branch_node_id, node_ids in routes_node_ids.items():
-            for node_id in node_ids:
-                if node_id not in edge_mapping or len(edge_mapping[node_id]) == 0:
-                    if branch_node_id not in leaf_node_ids:
-                        leaf_node_ids[branch_node_id] = []
+        queue = deque()
 
-                    leaf_node_ids[branch_node_id].append(node_id)
+        for successor in parallel_branch_node_ids:
+            node_to_branches[successor].add(successor)  # 用直接后继节点标识分支
+            branch_nodes[successor].add(successor)
+            queue.append(successor)
 
-                for branch_node_id2, inner_route2 in routes_node_ids.items():
-                    if (
-                        branch_node_id != branch_node_id2
-                        and node_id in inner_route2
-                        and len(reverse_edge_mapping.get(node_id, [])) > 1
-                        and cls._is_node_in_routes(
-                            reverse_edge_mapping=reverse_edge_mapping,
-                            start_node_id=node_id,
-                            routes_node_ids=routes_node_ids,
-                        )
-                    ):
-                        if node_id not in merge_branch_node_ids:
-                            merge_branch_node_ids[node_id] = []
+        # bfs
+        while queue:
+            current_node = queue.popleft()
+            current_branches = node_to_branches[current_node]
 
-                        if branch_node_id2 not in merge_branch_node_ids[node_id]:
-                            merge_branch_node_ids[node_id].append(branch_node_id2)
+            for neighbor in edge_mapping.get(current_node, []):
+                neighbor_node_id = neighbor.target_node_id
+                neighbor_branches = node_to_branches[neighbor_node_id]
+                updated_branches = neighbor_branches.union(current_branches)
 
-        # sorted merge_branch_node_ids by branch_node_ids length desc
-        merge_branch_node_ids = dict(sorted(merge_branch_node_ids.items(), key=lambda x: len(x[1]), reverse=True))
+                if updated_branches != neighbor_branches:
+                    node_to_branches[neighbor_node_id] = updated_branches
+                    queue.append(neighbor_node_id)
+                    if len(updated_branches) == num_branches:
+                        for v in branch_nodes.values():
+                            if neighbor_node_id in v:
+                                v.remove(neighbor_node_id)
+                        return branch_nodes
 
-        duplicate_end_node_ids = {}
-        for node_id, branch_node_ids in merge_branch_node_ids.items():
-            for node_id2, branch_node_ids2 in merge_branch_node_ids.items():
-                if node_id != node_id2 and set(branch_node_ids) == set(branch_node_ids2):
-                    if (node_id, node_id2) not in duplicate_end_node_ids and (
-                        node_id2,
-                        node_id,
-                    ) not in duplicate_end_node_ids:
-                        duplicate_end_node_ids[(node_id, node_id2)] = branch_node_ids
-
-        for (node_id, node_id2), branch_node_ids in duplicate_end_node_ids.items():
-            # check which node is after
-            if cls._is_node2_after_node1(node1_id=node_id, node2_id=node_id2, edge_mapping=edge_mapping):
-                if node_id in merge_branch_node_ids:
-                    del merge_branch_node_ids[node_id2]
-            elif cls._is_node2_after_node1(node1_id=node_id2, node2_id=node_id, edge_mapping=edge_mapping):
-                if node_id2 in merge_branch_node_ids:
-                    del merge_branch_node_ids[node_id]
-
-        branches_merge_node_ids: dict[str, str] = {}
-        for node_id, branch_node_ids in merge_branch_node_ids.items():
-            if len(branch_node_ids) <= 1:
-                continue
-
-            for branch_node_id in branch_node_ids:
-                if branch_node_id in branches_merge_node_ids:
-                    continue
-
-                branches_merge_node_ids[branch_node_id] = node_id
-
-        in_branch_node_ids: dict[str, list[str]] = {}
-        for branch_node_id, node_ids in routes_node_ids.items():
-            in_branch_node_ids[branch_node_id] = []
-            if branch_node_id not in branches_merge_node_ids:
-                # all node ids in current branch is in this thread
-                in_branch_node_ids[branch_node_id].append(branch_node_id)
-                in_branch_node_ids[branch_node_id].extend(node_ids)
-            else:
-                merge_node_id = branches_merge_node_ids[branch_node_id]
-                if merge_node_id != branch_node_id:
-                    in_branch_node_ids[branch_node_id].append(branch_node_id)
-
-                # fetch all node ids from branch_node_id and merge_node_id
-                cls._recursively_add_parallel_node_ids(
-                    branch_node_ids=in_branch_node_ids[branch_node_id],
-                    edge_mapping=edge_mapping,
-                    merge_node_id=merge_node_id,
-                    start_node_id=branch_node_id,
-                )
-
-        return in_branch_node_ids
+                for n in updated_branches:
+                    branch_nodes[n].add(neighbor_node_id)
+        return branch_nodes
 
     @classmethod
     def _recursively_fetch_routes(

@@ -789,3 +789,283 @@ def test_parallels_graph6():
 
     for node_id in ["code1", "code2"]:
         assert graph.node_parallel_mapping[node_id] == child_parallel.id
+
+
+def test_parallel_graph7():
+    graph_config = {
+        "edges": [
+            {
+                "id": "start-source-if-else-target",
+                "source": "start",
+                "sourceHandle": "source",
+                "target": "if-else",
+                "targetHandle": "target"
+            },
+            {
+                "id": "start-source-code1-target",
+                "source": "start",
+                "sourceHandle": "source",
+                "target": "code1",
+                "targetHandle": "target"
+            },
+            {
+                "id": "start-source-code2-target",
+                "source": "start",
+                "sourceHandle": "source",
+                "target": "code2",
+                "targetHandle": "target"
+            },
+            {
+                "id": "code1-source-code3-target",
+                "source": "code1",
+                "sourceHandle": "source",
+                "target": "code3",
+                "targetHandle": "target"
+            },
+            {
+                "id": "code2-source-code3-target",
+                "source": "code2",
+                "sourceHandle": "source",
+                "target": "code3",
+                "targetHandle": "target"
+            },
+            {
+                "id": "code3-source-value-agg-target",
+                "source": "code3",
+                "sourceHandle": "source",
+                "target": "value-agg",
+                "targetHandle": "target"
+            },
+            {
+                "id": "if-else-true-code4-target",
+                "source": "if-else",
+                "sourceHandle": "true",
+                "target": "code4",
+                "targetHandle": "target"
+            },
+            {
+                "id": "code4-source-value-agg-target",
+                "source": "code4",
+                "sourceHandle": "source",
+                "target": "value-agg",
+                "targetHandle": "target"
+            },
+            {
+                "id": "value-agg-source-end-target",
+                "source": "value-agg",
+                "sourceHandle": "source",
+                "target": "end",
+                "targetHandle": "target"
+            }
+        ],
+        "nodes": [
+            {
+                "data": {
+                    "title": "start",
+                    "type": "start",
+                    "variables": [
+                        {
+                            "label": "arg",
+                            "max_length": 48,
+                            "options": [
+
+                            ],
+                            "required": True,
+                            "type": "text-input",
+                            "variable": "arg"
+                        }
+                    ]
+                },
+                "id": "start"
+            },
+            {
+                "data": {
+                    "cases": [
+                        {
+                            "case_id": "true",
+                            "conditions": [
+                                {
+                                    "comparison_operator": "contains",
+                                    "id": "09823c40-b824-4931-bb9a-7d733e1cade6",
+                                    "value": "aaa",
+                                    "varType": "string",
+                                    "variable_selector": [
+                                        "start",
+                                        "arg"
+                                    ]
+                                }
+                            ],
+                            "id": "true",
+                            "logical_operator": "and"
+                        }
+                    ],
+                    "title": "if-else",
+                    "type": "if-else"
+                },
+                "id": 'if-else'
+            },
+            {
+                "data": {
+                    "code": "\ndef main(arg1: str, arg2: str) -> dict:\n    return {\n        \"result\": arg1 + "
+                            "arg2,\n    }\n",
+                    "code_language": "python3",
+                    "desc": "",
+                    "outputs": {
+                        "result": {
+                            "type": "string"
+                        }
+                    },
+                    "title": "code1",
+                    "type": "code",
+                    "variables": [
+                        {
+                            "value_selector": [
+                                "start",
+                                "arg"
+                            ],
+                            "variable": "arg1"
+                        },
+                        {
+                            "value_selector": [
+                                "start",
+                                "arg"
+                            ],
+                            "variable": "arg2"
+                        }
+                    ]
+                },
+                "id": 'code1'
+            },
+            {
+                "data": {
+                    "code": "\ndef main(arg1: str, arg2: str) -> dict:\n    return {\n        \"result\": arg1 + "
+                            "arg2,\n    }\n",
+                    "code_language": "python3",
+                    "outputs": {
+                        "result": {
+                            "type": "string"
+                        }
+                    },
+                    "title": "code2",
+                    "type": "code",
+                    "variables": [
+                        {
+                            "value_selector": [
+                                "start",
+                                "arg"
+                            ],
+                            "variable": "arg1"
+                        },
+                        {
+                            "value_selector": [
+                                "start",
+                                "arg"
+                            ],
+                            "variable": "arg2"
+                        }
+                    ]
+                },
+                "id": 'code2'
+            },
+            {
+                "data": {
+                    "code": "\ndef main(arg1: str, arg2: str) -> dict:\n    return {\n        \"result\": arg1 + "
+                            "arg2,\n    }\n",
+                    "code_language": "python3",
+                    "outputs": {
+                        "result": {
+                            "type": "string"
+                        }
+                    },
+                    "title": "code3",
+                    "type": "code",
+                    "variables": [
+                        {
+                            "value_selector": [
+                                "code1",
+                                "result"
+                            ],
+                            "variable": "arg1"
+                        },
+                        {
+                            "value_selector": [
+                                "code2",
+                                "result"
+                            ],
+                            "variable": "arg2"
+                        }
+                    ]
+                },
+                "id": 'code3'
+            },
+            {
+                "data": {
+                    "desc": "",
+                    "output_type": "string",
+                    "title": "vg",
+                    "type": "variable-aggregator",
+                    "variables": [
+                        [
+                            "code3",
+                            "result"
+                        ],
+                        [
+                            "code4",
+                            "result"
+                        ]
+                    ]
+                },
+                "id": 'value-agg'
+            },
+            {
+                "data": {
+                    "code": "\ndef main(arg1: str, arg2: str) -> dict:\n    return {\n        \"result\": arg1 + "
+                            "arg2,\n    }\n",
+                    "code_language": "python3",
+                    "outputs": {
+                        "result": {
+                            "type": "string"
+                        }
+                    },
+                    "title": "code4",
+                    "type": "code",
+                    "variables": [
+                        {
+                            "value_selector": [
+                                "start",
+                                "arg"
+                            ],
+                            "variable": "arg1"
+                        },
+                        {
+                            "value_selector": [
+                                "start",
+                                "arg"
+                            ],
+                            "variable": "arg2"
+                        }
+                    ]
+                },
+                "id": 'code4'
+            },
+            {
+                "data": {
+                    "desc": "",
+                    "outputs": [
+                        {
+                            "value_selector": [
+                                "value-agg",
+                                "output"
+                            ],
+                            "variable": "output"
+                        }
+                    ],
+                    "title": "end",
+                    "type": "end"
+                },
+                "id": 'end'
+            }
+        ]
+    }
+    graph = Graph.init(graph_config)
+    assert len(graph.parallel_mapping) == 1
